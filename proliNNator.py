@@ -76,7 +76,7 @@ def main():
     # Argument parser setup
     parser = argparse.ArgumentParser(description='ProliNNator is a tool that predicts Proline probabilties based on pretrained neural networks. \n Contact: Jakob.Riccabona@medizin.uni-leipzig.de')
     parser.add_argument('-i', '--input', type=str, required=True, help='Path to the input PDB file')
-    parser.add_argument('-m', '--model', type=str, default='3D', help='Name of the Network you want to use \n either use 1D or 3D (default: 3D)')
+    parser.add_argument('-m', '--model', type=str, default='models/3D-model.keras', help='Path to the model')
     parser.add_argument('-o', '--output', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
     parser.add_argument('--ramachandran', type=str, help='Filename to save a Ramachandran plot with probabilities as a PNG')
     parser.add_argument('--fastrelax', action='store_true', help='Flag to perform a fast relax on the structure before analysis')
@@ -101,8 +101,8 @@ def main():
 
     # Load the ML model
     mod = args.model
-    if mod == '1D':
-        model = load_model('models/1D-model.keras')
+    if '1D' in mod:
+        model = load_model(mod)
          # Format data to relevant features
         data = pd.DataFrame(features, columns=['Sequence','DSSP','SASA','Scores'])
         sec_onehot = OneHotEncoder(data, "DSSP")
@@ -151,10 +151,10 @@ def main():
         # Save pdb
         pose.dump_pdb(args.output)
 
-    elif mod == '3D':
+    elif '3D' in mod:
         # load model
         custom_objects = {'ECCConv': ECCConv, 'GlobalSumPool': GlobalSumPool}
-        model = load_model('models/3D-model.keras', custom_objects)
+        model = load_model(mod, custom_objects)
 
         # Pick some decorators to add to your network
         decorators = [decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep, ScoreType.fa_atr, ScoreType.fa_sol, ScoreType.lk_ball_wtd, ScoreType.fa_elec, ScoreType.hbond_sr_bb, ScoreType.hbond_lr_bb, ScoreType.hbond_bb_sc, ScoreType.hbond_sc])]
@@ -209,12 +209,20 @@ def main():
         for c in range(1, pose.pdb_info().num_chains() + 1):
             chain_start = pose.conformation().chain_begin(c)
             chain_end = pose.conformation().chain_end(c)
-            for i in range(chain_start + 3, chain_end - 3):
-                if counter < len(y_pred):
-                    phi = np.append(phi, pose.phi(i))
-                    psi = np.append(psi, pose.psi(i))
-                    weights = np.append(weights, y_pred[counter])
-                    counter += 1
+            if mod == '1D':
+                for i in range(chain_start + 3, chain_end - 3):
+                    if counter < len(y_pred):
+                        phi = np.append(phi, pose.phi(i))
+                        psi = np.append(psi, pose.psi(i))
+                        weights = np.append(weights, y_pred[counter])
+                        counter += 1
+            elif mod == '3D':
+                for i in range(chain_start, chain_end):
+                    if counter < len(y_pred):
+                        phi = np.append(phi, pose.phi(i))
+                        psi = np.append(psi, pose.psi(i))
+                        weights = np.append(weights, y_pred[counter])
+                        counter += 1
         plotting_data = np.vstack((phi, psi, weights)).T
         df_plot = pd.DataFrame(plotting_data, columns=['phi', 'psi', 'weight'])
         sns.scatterplot(data=df_plot, x='phi', y='psi', hue='weight', hue_order= [0.0,0.25,0.5,0.75,1.0], palette='coolwarm')
