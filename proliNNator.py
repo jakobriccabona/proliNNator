@@ -70,7 +70,6 @@ def OneHotEncoder(df, column):
     encoded = pd.get_dummies(seq)
     return encoded
 
-
 # main
 def main():
     # Argument parser setup
@@ -78,6 +77,7 @@ def main():
     parser.add_argument('-i', '--input', type=str, required=True, help='Path to the input PDB file')
     parser.add_argument('-m', '--model', type=str, default='3D-model.keras', help='Path to the model')
     parser.add_argument('-o', '--output', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
+    parser.add_argument('-csv', type=str, help='Filename to save a csv file with the probabilities')
     parser.add_argument('--ramachandran', type=str, help='Filename to save a Ramachandran plot with probabilities as a PNG')
     parser.add_argument('--fastrelax', action='store_true', help='Flag to perform a fast relax on the structure before analysis')
     args = parser.parse_args()
@@ -132,6 +132,23 @@ def main():
 
         # Run prediction
         y_pred = model.predict(features)
+        
+        if args.csv:
+            rows = []
+            for c in range(1, pose.pdb_info().num_chains() + 1):
+                chain_start = pose.conformation().chain_begin(c)
+                chain_end = pose.conformation().chain_end(c)
+                for i in range(chain_start + 3, chain_end - 3):
+                    if i-1 < len(y_pred):
+                        row = {
+                            'chain': pose.pdb_info().chain(i),
+                            'amino_acid': pose.residue(i).name(),
+                            'position_number': i,
+                            'probability': y_pred[i-1]
+                        }
+                        rows.append(row)
+            df = pd.DataFrame(rows)
+            df.to_csv(args.csv, index=False)
 
         # Map y_pred onto crystal structure and save pdb
         # Set all bfactors to zero
@@ -178,6 +195,24 @@ def main():
         As = np.asarray(As)
         Es = np.asarray(Es) 
         y_pred = model.predict([Xs, As, Es])
+
+        #create csv file
+        if args.csv:
+            rows = []
+            for c in range(1, pose.pdb_info().num_chains() + 1):
+                chain_start = pose.conformation().chain_begin(c)
+                chain_end = pose.conformation().chain_end(c)
+                for i in range(chain_start, chain_end):
+                    if i-1 < len(y_pred):
+                        row = {
+                            'chain': pose.pdb_info().chain(i),
+                            'amino_acid': pose.residue(i).name(),
+                            'position_number': i,
+                            'probability': y_pred[i-1]
+                        }
+                        rows.append(row)
+            df = pd.DataFrame(rows)
+            df.to_csv(args.csv, index=False)
 
         # Map y_pred onto crystal structure and save pdb
         # Set all bfactors to zero
