@@ -77,7 +77,7 @@ def main():
     parser.add_argument('-i', '--input', type=str, required=True, help='Path to the input PDB file')
     parser.add_argument('-m', '--model', type=str, default='3D-model.keras', help='Path to the model')
     parser.add_argument('-o', '--output', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
-    parser.add_argument('-csv', type=str, help='Filename to save a csv file with the probabilities')
+    parser.add_argument('-csv', type=str, default='output.csv', help='Filename to save a csv file with the probabilities')
     parser.add_argument('--ramachandran', type=str, help='Filename to save a Ramachandran plot with probabilities as a PNG')
     parser.add_argument('--fastrelax', action='store_true', help='Flag to perform a fast relax on the structure before analysis')
     args = parser.parse_args()
