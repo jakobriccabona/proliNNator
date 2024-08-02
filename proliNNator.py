@@ -76,7 +76,7 @@ def main():
     # Argument parser setup
     parser = argparse.ArgumentParser(description='ProliNNator is a tool that predicts Proline probabilties based on pretrained neural networks. \n Contact: Jakob.Riccabona@medizin.uni-leipzig.de')
     parser.add_argument('-i', '--input', type=str, required=True, help='Path to the input PDB file')
-    parser.add_argument('-m', '--model', type=str, default='models/3D-model.keras', help='Path to the model')
+    parser.add_argument('-m', '--model', type=str, default='3D-model.keras', help='Path to the model')
     parser.add_argument('-o', '--output', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
     parser.add_argument('--ramachandran', type=str, help='Filename to save a Ramachandran plot with probabilities as a PNG')
     parser.add_argument('--fastrelax', action='store_true', help='Flag to perform a fast relax on the structure before analysis')
@@ -209,14 +209,14 @@ def main():
         for c in range(1, pose.pdb_info().num_chains() + 1):
             chain_start = pose.conformation().chain_begin(c)
             chain_end = pose.conformation().chain_end(c)
-            if mod == '1D':
+            if '1D' in mod:
                 for i in range(chain_start + 3, chain_end - 3):
                     if counter < len(y_pred):
                         phi = np.append(phi, pose.phi(i))
                         psi = np.append(psi, pose.psi(i))
                         weights = np.append(weights, y_pred[counter])
                         counter += 1
-            elif mod == '3D':
+            elif '3D' in mod:
                 for i in range(chain_start, chain_end):
                     if counter < len(y_pred):
                         phi = np.append(phi, pose.phi(i))
