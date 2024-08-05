@@ -1,7 +1,7 @@
 # proliNNator
 a NN based proline prediction tool for protein structures
 
-
+'''
 optional arguments:
   -h, --help            show this help message and exit
   -i INPUT, --input INPUT
@@ -14,3 +14,4 @@ optional arguments:
   --ramachandran RAMACHANDRAN
                         Filename to save a Ramachandran plot with probabilities as a PNG
   --fastrelax           Flag to perform a fast relax on the structure before analysis
+'''
