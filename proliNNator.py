@@ -252,7 +252,7 @@ def main():
                         weights = np.append(weights, y_pred[counter])
                         counter += 1
             elif '3D' in mod:
-                for i in range(chain_start, chain_end):
+                for i in range(chain_start, chain_end + 1):
                     if counter < len(y_pred):
                         phi = np.append(phi, pose.phi(i))
                         psi = np.append(psi, pose.psi(i))
