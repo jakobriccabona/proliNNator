@@ -96,13 +96,13 @@ def main():
         fast_relax.apply(pose)
         print('fast relax finished')
 
-    # Calculate features from pdb
-    features = extract_features(pose, [i for i in range(3, len(pose.sequence())-3)])
 
     # Load the ML model
     mod = args.model
     if '1D' in mod:
         model = load_model(mod)
+        # Calculate features from pdb
+        features = extract_features(pose, [i for i in range(3, len(pose.sequence())-3)])
          # Format data to relevant features
         data = pd.DataFrame(features, columns=['Sequence','DSSP','SASA','Scores'])
         sec_onehot = OneHotEncoder(data, "DSSP")
@@ -186,7 +186,7 @@ def main():
         Es = []
 
         for resid in range(1, len(pose.sequence()) + 1):
-            X, A, E, resids = data_maker.generate_input_for_resid(wrapped_pose, resid, data_cache=cache)
+            X, A, E, _ = data_maker.generate_input_for_resid(wrapped_pose, resid, data_cache=cache)
             Xs.append(X)
             As.append(A)
             Es.append(E)
@@ -202,7 +202,7 @@ def main():
             for c in range(1, pose.pdb_info().num_chains() + 1):
                 chain_start = pose.conformation().chain_begin(c)
                 chain_end = pose.conformation().chain_end(c)
-                for i in range(chain_start, chain_end):
+                for i in range(chain_start, chain_end + 1):
                     if i-1 < len(y_pred):
                         row = {
                             'chain': pose.pdb_info().chain(i),
@@ -224,7 +224,7 @@ def main():
         for c in range(1, pose.pdb_info().num_chains() + 1):
             chain_start = pose.conformation().chain_begin(c)
             chain_end = pose.conformation().chain_end(c)
-            for i in range(chain_start, chain_end):
+            for i in range(chain_start, chain_end + 1):
                 if counter < len(y_pred):
                     for j in range(1, pose.residue(i).natoms() + 1):
                         pose.pdb_info().bfactor(i, j, y_pred[counter])
