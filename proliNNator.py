@@ -77,7 +77,7 @@ def main():
     parser.add_argument('-i', '--input', type=str, required=True, help='Path to the input PDB file')
     parser.add_argument('-m', '--model', type=str, default='3D-model.keras', help='Path to the model')
     parser.add_argument('-o', '--output', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
-    parser.add_argument('-csv', type=str, default='output.csv', help='Filename to save a csv file with the probabilities')
+    parser.add_argument('--csv', type=str, default='output.csv', help='Filename to save a csv file with the probabilities')
     parser.add_argument('--ramachandran', type=str, help='Filename to save a Ramachandran plot with probabilities as a PNG')
     parser.add_argument('--fastrelax', action='store_true', help='Flag to perform a fast relax on the structure before analysis')
     args = parser.parse_args()
@@ -176,7 +176,7 @@ def main():
         # Pick some decorators to add to your network
         decorators = [decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep, ScoreType.fa_atr, ScoreType.fa_sol, ScoreType.lk_ball_wtd, ScoreType.fa_elec, ScoreType.hbond_sr_bb, ScoreType.hbond_lr_bb, ScoreType.hbond_bb_sc, ScoreType.hbond_sc])]
         data_maker = mg.DataMaker(decorators=decorators, edge_distance_cutoff_A=8.0, max_residues=10, nbr_distance_cutoff_A=10.0)
-        data_maker.summary()
+        #data_maker.summary()
 
         wrapped_pose = mg.RosettaPoseWrapper(pose)
         cache = data_maker.make_data_cache(wrapped_pose)
@@ -213,6 +213,7 @@ def main():
                         rows.append(row)
             df = pd.DataFrame(rows)
             df.to_csv(args.csv, index=False)
+            print(f'Successfully generated {args.csv}')
 
         # Map y_pred onto crystal structure and save pdb
         # Set all bfactors to zero
