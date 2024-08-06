@@ -207,7 +207,7 @@ def main():
                         row = {
                             'chain': pose.pdb_info().chain(i),
                             'amino_acid': pose.residue(i).name(),
-                            'position_number': i,
+                            'position_number': pose.pdb_info().number(i),
                             'probability': y_pred[i-1]
                         }
                         rows.append(row)
