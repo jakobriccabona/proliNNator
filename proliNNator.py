@@ -17,6 +17,7 @@ from pyrosetta.rosetta.core.scoring import ScoreType
 from pyrosetta.rosetta.protocols.relax import FastRelax
 from pyrosetta.rosetta.core.scoring.methods import EnergyMethodOptions
 
+import keras
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import StandardScaler
 from spektral.layers import ECCConv, GlobalSumPool
