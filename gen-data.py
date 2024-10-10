@@ -21,7 +21,7 @@ from multiprocessing import Pool, cpu_count
 pyrosetta.init('-mute all')
 
 # Pick decorators
-decorators = [decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep, ScoreType.fa_atr, ScoreType.fa_sol, ScoreType.lk_ball_wtd, ScoreType.fa_elec, ScoreType.hbond_sr_bb, ScoreType.hbond_lr_bb, ScoreType.hbond_bb_sc, ScoreType.hbond_sc])]
+decorators = [decs.SimpleBBGeometry(use_nm = False), decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep, ScoreType.fa_atr, ScoreType.fa_sol, ScoreType.lk_ball_wtd, ScoreType.fa_elec, ScoreType.hbond_sr_bb, ScoreType.hbond_lr_bb, ScoreType.hbond_bb_sc, ScoreType.hbond_sc])]
 
 data_maker = mg.DataMaker(decorators=decorators,
                            edge_distance_cutoff_A=8.0,
@@ -41,7 +41,7 @@ def get_non_proline_positions(pose, proline_positions):
     return non_proline_positions
 
 def save_chunk(chunk_index, Xs, As, Es, outs):
-    np.savez_compressed(f'data_chunk_{chunk_index}.npz', Xs=Xs, As=As, Es=Es, outs=outs)
+    np.savez_compressed(f'data/data_chunk_{chunk_index}.npz', Xs=Xs, As=As, Es=Es, outs=outs)
     print(f'Chunk {chunk_index} saved!')
 
 def process_and_save_chunk(chunk_index, pdb_chunk):
@@ -84,6 +84,6 @@ def process_chunks(pdb_list, chunk_size):
         print("Processing and saving completed.")
 
 # Process the pdb_list in chunks
-pdb_list = glob.glob('cath_db/*?.pdb')
+pdb_list = glob.glob('/home/iwe14/Documents/database/cath_S40/*?.pdb')
 chunk_size = 200
 process_chunks(pdb_list, chunk_size)
