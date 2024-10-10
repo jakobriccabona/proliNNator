@@ -40,7 +40,7 @@ Es = np.asarray(Es)
 outs = np.asarray(outs)
 
 # Pick decorators
-decorators = [decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep, ScoreType.fa_atr, ScoreType.fa_sol, ScoreType.lk_ball_wtd, ScoreType.fa_elec, ScoreType.hbond_sr_bb, ScoreType.hbond_lr_bb, ScoreType.hbond_bb_sc, ScoreType.hbond_sc])]
+decorators = [decs.SimpleBBGeometry(use_nm = False), decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep, ScoreType.fa_atr, ScoreType.fa_sol, ScoreType.lk_ball_wtd, ScoreType.fa_elec, ScoreType.hbond_sr_bb, ScoreType.hbond_lr_bb, ScoreType.hbond_bb_sc, ScoreType.hbond_sc])]
 
 data_maker = mg.DataMaker(decorators=decorators,
                            edge_distance_cutoff_A=8.0,
@@ -73,11 +73,17 @@ E_ros = E_reshaped.reshape(-1, *num_features)
 # Define GCN model
 X_in, A_in, E_in = data_maker.generate_XAE_input_layers()
 
-L1 = ECCConv(20, activation='relu')([X_in, A_in, E_in])
-L1_drop = Dropout(0.3)(L1)
-L2 = GlobalSumPool()(L1_drop)
-L3 = Flatten()(L2)
-output = Dense(1, name="out", activation='sigmoid', kernel_regularizer=regularizers.l2(0.01))(L3)
+L1 = ECCConv(15, activation=None)([X_in, A_in, E_in])
+L1_bn = BatchNormalization()(L1)
+L1_act = Activation('relu')(L1_bn)
+L1_drop = Dropout(0.2)(L1_act)
+L2 = ECCConv(15, activation=None)([L1_drop, A_in, E_in])
+L2_bn = BatchNormalization()(L2)
+L2_act = Activation('relu')(L2_bn)
+L2_drop = Dropout(0.2)(L2_act)
+L3 = GlobalSumPool()(L2_drop)
+L4 = Flatten()(L3)
+output = Dense(1, name="out", activation="sigmoid", kernel_regularizer=l2(0.01))(L4)
 
 model = Model(inputs=[X_in, A_in, E_in], outputs=output)
 opt = keras.optimizers.Adam(learning_rate=1e-4)
@@ -85,5 +91,5 @@ model.compile(optimizer=opt, loss='binary_crossentropy')
 model.summary()
 
 # Train the model
-history = model.fit(x=[X_ros, A_ros, E_ros], y=y_ros, batch_size=200, epochs=500, validation_data=([X_val, A_val, E_val], y_val))
+history = model.fit(x=[X_ros, A_ros, E_ros], y=y_ros, batch_size=200, epochs=100, validation_data=([X_val, A_val, E_val], y_val))
 model.save("3D-model.keras")
