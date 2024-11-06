@@ -98,7 +98,7 @@ model.compile(optimizer=opt, loss='binary_crossentropy')
 model.summary()
 
 # Train the model
-history = model.fit(x=[X_ros, A_ros, E_ros], y=y_ros, batch_size=200, epochs=100, validation_data=([X_val, A_val, E_val], y_val))
+history = model.fit(x=[X_ros, A_ros, E_ros], y=y_ros, batch_size=128, epochs=100, validation_data=([X_val, A_val, E_val], y_val))
 model.save("3D-model-new.keras")
 
 #further validation
