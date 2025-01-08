@@ -17,9 +17,9 @@ from pyrosetta.rosetta.core.scoring import ScoreType
 from pyrosetta.rosetta.protocols.relax import FastRelax
 from pyrosetta.rosetta.core.scoring.methods import EnergyMethodOptions
 
-import keras
+#import keras
 from tensorflow.keras.models import load_model
-from sklearn.preprocessing import StandardScaler
+#from sklearn.preprocessing import StandardScaler
 from spektral.layers import ECCConv, GlobalMaxPool, GATConv
 
 import menten_gcn as mg
@@ -30,7 +30,7 @@ def main():
     # Argument parser setup
     parser = argparse.ArgumentParser(description='ProliNNator is a tool that predicts Proline probabilties based on pretrained neural networks. \n Contact: Jakob.Riccabona@medizin.uni-leipzig.de')
     parser.add_argument('-i', '--input', type=str, required=True, help='Path to the input PDB file')
-    parser.add_argument('-m', '--model', type=str, default='3D-model-v2.1.keras', help='Path to the model')
+    parser.add_argument('-m', '--model', type=str, default='3D-model-v2.4.keras', help='Path to the model')
     parser.add_argument('-o', '--output', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
     parser.add_argument('--csv', type=str, default='output.csv', help='Filename to save a csv file with the probabilities')
     parser.add_argument('--ramachandran', type=str, help='Filename to save a Ramachandran plot with probabilities as a PNG')
@@ -93,30 +93,30 @@ def main():
                         'chain': pose.pdb_info().chain(i),
                         'amino_acid': pose.residue(i).name(),
                         'position_number': pose.pdb_info().number(i),
-                        'probability': y_pred[i-1]
+                        'probability': round(float(y_pred[i - 1]), 5)
                         }
                     rows.append(row)
         df = pd.DataFrame(rows)
-        df.to_csv(args.csv, index=False)
+        df.to_csv(args.csv, index=False, float_format='%.5f')
         print(f'Successfully generated {args.csv}')
 
-        # Map y_pred onto crystal structure and save pdb
-        # Set all bfactors to zero
-    for i in range(1, len(pose.sequence()) + 1):
-        for j in range(1, pose.residue(i).natoms() + 1):
-            pose.pdb_info().bfactor(i, j, 0)
+    #save pdb
+    if args.output:
+    # Set all bfactors to zero
+        for i in range(1, len(pose.sequence()) + 1):
+            for j in range(1, pose.residue(i).natoms() + 1):
+                pose.pdb_info().bfactor(i, j, 0)
     # Fill in bfactors
-    counter = 0
-    for c in range(1, pose.pdb_info().num_chains() + 1):
-        chain_start = pose.conformation().chain_begin(c)
-        chain_end = pose.conformation().chain_end(c)
-        for i in range(chain_start, chain_end + 1):
-            if counter < len(y_pred):
-                for j in range(1, pose.residue(i).natoms() + 1):
-                    pose.pdb_info().bfactor(i, j, y_pred[counter])
-                counter += 1
-        # Save pdb
-    pose.dump_pdb(args.output)
+        counter = 0
+        for c in range(1, pose.pdb_info().num_chains() + 1):
+            chain_start = pose.conformation().chain_begin(c)
+            chain_end = pose.conformation().chain_end(c)
+            for i in range(chain_start, chain_end + 1):
+                if counter < len(y_pred):
+                    for j in range(1, pose.residue(i).natoms() + 1):
+                        pose.pdb_info().bfactor(i, j, y_pred[counter])
+                    counter += 1
+                    pose.dump_pdb(args.output)
 
     # plot the predicted positions in ramachandran space
     if args.ramachandran:
