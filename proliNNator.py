@@ -55,7 +55,7 @@ def main():
     # Load the ML model
     mod = args.model
     # load model
-    custom_objects = {'GATConv': GATConv, 'ECCConv': ECCConv, 'GlobalMaxPool': GlobalMaxPool}
+    custom_objects = {'ECCConv': ECCConv, 'GlobalMaxPool': GlobalMaxPool}
     model = load_model(mod, custom_objects)
 
         # Pick some decorators to add to your network
@@ -116,7 +116,7 @@ def main():
                     for j in range(1, pose.residue(i).natoms() + 1):
                         pose.pdb_info().bfactor(i, j, y_pred[counter])
                     counter += 1
-                    pose.dump_pdb(args.output)
+        pose.dump_pdb(args.output)
 
     # plot the predicted positions in ramachandran space
     if args.ramachandran:
