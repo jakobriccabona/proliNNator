@@ -102,7 +102,8 @@ def main():
                     row = {
                         'chain': pose.pdb_info().chain(i),
                         'amino_acid': pose.residue(i).name(),
-                        'position_number': pose.pdb_info().number(i),
+                        'pdb_number': pose.pdb_info().number(i),
+                        'rosetta_number': int(i),
                         'probability': round(float(y_pred[i - 1]), 5)
                         }
                     rows.append(row)
@@ -127,6 +128,7 @@ def main():
                         pose.pdb_info().bfactor(i, j, y_pred[counter])
                     counter += 1
         pose.dump_pdb(args.output)
+        print(f'Successfully generated {args.output}')
 
     # plot the predicted positions in ramachandran space
     if args.ramachandran:
