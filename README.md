@@ -1,6 +1,6 @@
 # proliNNator
 a graph convolutional network based proline prediction tool for protein structures
-
+<img width="612" alt="graph-generation" src="https://github.com/user-attachments/assets/43cddf8a-1fb6-4611-bbbd-bc0b6980dd78" />
 ```
 optional arguments:
   -h, --help            show this help message and exit
@@ -17,5 +17,5 @@ optional arguments:
 ```
 
 this network was trained on fastrelaxed proteins (maximum length 150 amino acids)
-<img width="612" alt="graph-generation" src="https://github.com/user-attachments/assets/43cddf8a-1fb6-4611-bbbd-bc0b6980dd78" />
+## network architecture
 <img width="516" alt="architecture" src="https://github.com/user-attachments/assets/b0d28c58-543c-4532-a905-46f6244da02f" />
