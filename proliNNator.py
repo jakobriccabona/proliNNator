@@ -60,7 +60,7 @@ def main():
 
         # Pick some decorators to add to your network
     decorators = [decs.SequenceSeparation(ln = True),
-                  decs.SimpleBBGeometry(use_nm = False), 
+                  #decs.SimpleBBGeometry(use_nm = False), 
                   decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep,
                                                                                      ScoreType.fa_atr, 
                                                                                      ScoreType.fa_sol, 
