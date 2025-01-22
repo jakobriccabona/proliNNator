@@ -30,7 +30,7 @@ def main():
     # Argument parser setup
     parser = argparse.ArgumentParser(description='ProliNNator is a tool that predicts Proline probabilties based on pretrained neural networks. \n Contact: Jakob.Riccabona@medizin.uni-leipzig.de')
     parser.add_argument('-i', '--input', type=str, required=True, help='Path to the input PDB file')
-    parser.add_argument('-m', '--model', type=str, default='3D-model-v2.4.keras', help='Path to the model')
+    parser.add_argument('-m', '--model', type=str, default='3D-model-v2.5.keras', help='Path to the model')
     parser.add_argument('-o', '--output', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
     parser.add_argument('--csv', type=str, default='output.csv', help='Filename to save a csv file with the probabilities')
     parser.add_argument('--ramachandran', type=str, help='Filename to save a Ramachandran plot with probabilities as a PNG')
@@ -59,7 +59,17 @@ def main():
     model = load_model(mod, custom_objects)
 
         # Pick some decorators to add to your network
-    decorators = [decs.SequenceSeparation(ln = True), decs.SimpleBBGeometry(use_nm = False), decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep, ScoreType.fa_atr, ScoreType.fa_sol, ScoreType.lk_ball_wtd, ScoreType.fa_elec, ScoreType.hbond_sr_bb, ScoreType.hbond_lr_bb, ScoreType.hbond_bb_sc, ScoreType.hbond_sc])]
+    decorators = [decs.SequenceSeparation(ln = True),
+                  decs.SimpleBBGeometry(use_nm = False), 
+                  decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep,
+                                                                                     ScoreType.fa_atr, 
+                                                                                     ScoreType.fa_sol, 
+                                                                                     ScoreType.lk_ball_wtd, 
+                                                                                     ScoreType.fa_elec, 
+                                                                                     ScoreType.hbond_sr_bb, 
+                                                                                     ScoreType.hbond_lr_bb, 
+                                                                                     ScoreType.hbond_bb_sc, 
+                                                                                     ScoreType.hbond_sc])]
     data_maker = mg.DataMaker(decorators=decorators, edge_distance_cutoff_A=8.0, max_residues=10, nbr_distance_cutoff_A=10.0)
     #data_maker.summary()
 
