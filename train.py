@@ -78,15 +78,15 @@ def UnderSample(x_label, y_label):
 
     rus = RandomUnderSampler(sampling_strategy='auto', random_state=42)
     data_reshaped = x_label.reshape(x_label.shape[0], -1)
-    data_new,  = rus.fit_resample(data_reshaped, y_label)
+    data_new, y_rus = rus.fit_resample(data_reshaped, y_label)
     num_features = x_label.shape[1:]
     x_rus = data_new.reshape(-1, *num_features)
     
-    return x_rus
+    return x_rus, y_rus
 
-X_rus = UnderSample(X_train, out_train)
-A_rus = UnderSample(A_train, out_train)
-E_rus = UnderSample(E_train, out_train)
+X_rus, y_rus = UnderSample(X_train, out_train)
+A_rus, _ = UnderSample(A_train, out_train)
+E_rus, _ = UnderSample(E_train, out_train)
 
 # Define GCN model
 X_in, A_in, E_in = data_maker.generate_XAE_input_layers()
@@ -101,7 +101,7 @@ L2_bn = BatchNormalization()(L2)
 L2_act = Activation('relu')(L2_bn)
 L2_drop = Dropout(0.2)(L2_act)
 
-L3 = ECCConv(16, activation=None)([L1_drop2, A_in, E_in])
+L3 = ECCConv(16, activation=None)([L2_drop, A_in, E_in])
 L3_bn = BatchNormalization()(L3)
 L3_act = Activation('relu')(L3_bn)
 L3_drop = Dropout(0.2)(L3_act)
@@ -125,7 +125,7 @@ early_stopping = keras.callbacks.EarlyStopping(
 )
 
 # Train the model
-history = model.fit(x=[X_ros, A_ros, E_ros], y=y_ros, batch_size=50, epochs=500, validation_data=([X_test, A_test, E_test], out_test), callbacks=[early_stopping])
+history = model.fit(x=[X_rus, A_rus, E_rus], y=y_rus, batch_size=50, epochs=500, validation_data=([X_test, A_test, E_test], out_test), callbacks=[early_stopping])
 model.save("3D-model-v2.4.keras")
 
 #further validation
