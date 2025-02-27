@@ -31,9 +31,9 @@ def main():
     parser = argparse.ArgumentParser(description='ProliNNator is a tool that predicts Proline probabilties based on pretrained neural networks. \n Contact: Jakob.Riccabona@medizin.uni-leipzig.de')
     parser.add_argument('-i', '--input', type=str, required=True, help='Path to the input PDB file')
     parser.add_argument('-m', '--model', type=str, default='3D-model-v2.5.keras', help='Path to the model')
-    parser.add_argument('-o', '--output', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
+    parser.add_argument('-p', '--pdb', type=str, default='output.pdb', help='Name of the output PDB file (default: output.pdb)')
     parser.add_argument('--csv', type=str, default='output.csv', help='Filename to save a csv file with the probabilities')
-    parser.add_argument('--ramachandran', type=str, help='Filename to save a Ramachandran plot with probabilities as a PNG')
+    parser.add_argument('--ramachandran', type=str, default='ramachandran.png', help='Filename to save a Ramachandran plot with probabilities as a PNG')
     parser.add_argument('--fastrelax', action='store_true', help='Flag to perform a fast relax on the structure before analysis')
     args = parser.parse_args()
 
@@ -57,11 +57,10 @@ def main():
     # load model
     custom_objects = {'ECCConv': ECCConv, 'GlobalMaxPool': GlobalMaxPool}
     model = load_model(mod, custom_objects)
-
+    if 'v2.5' in mod:
         # Pick some decorators to add to your network
-    decorators = [decs.SequenceSeparation(ln = True),
-                  #decs.SimpleBBGeometry(use_nm = False), 
-                  decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep,
+        decorators = [decs.SequenceSeparation(ln = True), 
+                      decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep,
                                                                                      ScoreType.fa_atr, 
                                                                                      ScoreType.fa_sol, 
                                                                                      ScoreType.lk_ball_wtd, 
@@ -70,8 +69,24 @@ def main():
                                                                                      ScoreType.hbond_lr_bb, 
                                                                                      ScoreType.hbond_bb_sc, 
                                                                                      ScoreType.hbond_sc])]
-    data_maker = mg.DataMaker(decorators=decorators, edge_distance_cutoff_A=8.0, max_residues=10, nbr_distance_cutoff_A=10.0)
-    #data_maker.summary()
+
+    else:
+        decorators = [decs.SequenceSeparation(ln = True),
+                      decs.SimpleBBGeometry(use_nm = False), 
+                      decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep,
+                                                                                     ScoreType.fa_atr, 
+                                                                                     ScoreType.fa_sol, 
+                                                                                     ScoreType.lk_ball_wtd, 
+                                                                                     ScoreType.fa_elec, 
+                                                                                     ScoreType.hbond_sr_bb, 
+                                                                                     ScoreType.hbond_lr_bb, 
+                                                                                     ScoreType.hbond_bb_sc, 
+                                                                                     ScoreType.hbond_sc])]
+    
+    data_maker = mg.DataMaker(decorators=decorators, 
+                              edge_distance_cutoff_A=8.0,
+                              max_residues=10, 
+                              nbr_distance_cutoff_A=10.0)
 
     wrapped_pose = mg.RosettaPoseWrapper(pose)
     cache = data_maker.make_data_cache(wrapped_pose)
@@ -112,7 +127,7 @@ def main():
         print(f'Successfully generated {args.csv}')
 
     #save pdb
-    if args.output:
+    if args.pdb:
     # Set all bfactors to zero
         for i in range(1, len(pose.sequence()) + 1):
             for j in range(1, pose.residue(i).natoms() + 1):
@@ -139,14 +154,7 @@ def main():
         for c in range(1, pose.pdb_info().num_chains() + 1):
             chain_start = pose.conformation().chain_begin(c)
             chain_end = pose.conformation().chain_end(c)
-            if '1D' in mod:
-                for i in range(chain_start + 3, chain_end - 3):
-                    if counter < len(y_pred):
-                        phi = np.append(phi, pose.phi(i))
-                        psi = np.append(psi, pose.psi(i))
-                        weights = np.append(weights, y_pred[counter])
-                        counter += 1
-            elif '3D' in mod:
+            if '3D' in mod:
                 for i in range(chain_start, chain_end + 1):
                     if counter < len(y_pred):
                         phi = np.append(phi, pose.phi(i))
