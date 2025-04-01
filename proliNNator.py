@@ -142,8 +142,8 @@ def main():
                     for j in range(1, pose.residue(i).natoms() + 1):
                         pose.pdb_info().bfactor(i, j, y_pred[counter])
                     counter += 1
-        pose.dump_pdb(args.output)
-        print(f'Successfully generated {args.output}')
+        pose.dump_pdb(args.pdb)
+        print(f'Successfully generated {args.pdb}')
 
     # plot the predicted positions in ramachandran space
     if args.ramachandran:
