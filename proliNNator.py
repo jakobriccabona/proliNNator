@@ -57,9 +57,10 @@ def main():
     # load model
     custom_objects = {'ECCConv': ECCConv, 'GlobalMaxPool': GlobalMaxPool}
     model = load_model(mod, custom_objects)
-    if 'v2.5' in mod:
+    if 'v2.4' in mod:
         # Pick some decorators to add to your network
-        decorators = [decs.SequenceSeparation(ln = True), 
+        decorators = [decs.SequenceSeparation(ln = True),
+                      decs.SimpleBBGeometry(use_nm = False), 
                       decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep,
                                                                                      ScoreType.fa_atr, 
                                                                                      ScoreType.fa_sol, 
@@ -72,7 +73,6 @@ def main():
 
     else:
         decorators = [decs.SequenceSeparation(ln = True),
-                      decs.SimpleBBGeometry(use_nm = False), 
                       decs.Rosetta_Ref2015_TwoBodyEneriges(individual=True, score_types=[ScoreType.fa_rep,
                                                                                      ScoreType.fa_atr, 
                                                                                      ScoreType.fa_sol, 
