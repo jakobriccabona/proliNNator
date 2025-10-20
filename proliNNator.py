@@ -55,7 +55,7 @@ def main():
     # Load the ML model
     mod = args.model
     # load model
-    custom_objects = {'ECCConv': ECCConv, 'GlobalMaxPool': GlobalMaxPool}
+    custom_objects = {'ECCConv': ECCConv, 'GlobalMaxPool': GlobalMaxPool, 'GATConv': GATConv}
     model = load_model(mod, custom_objects)
     if 'v2.4' in mod:
         # Pick some decorators to add to your network
