@@ -20,3 +20,16 @@ optional arguments:
 this network was trained on fastrelaxed proteins from the CATH database (maximum length 150 amino acids)
 ## network architecture
 <img width="516" alt="architecture" src="https://github.com/user-attachments/assets/b0d28c58-543c-4532-a905-46f6244da02f" />
+
+
+## docker execution
+here is how you can build the docker image:
+```
+docker build -t prolinnator:v1 .
+```
+the following command executes a test run:
+```
+docker run --rm -v $(pwd):/proliNNator/data prolinnator:v1 python proliNNator.py \
+-i test/3ft7.pdb -p test/out.pdb -m 3D-model-v2.5.keras --csv test/out.csv\
+--ramachandran test/plot.png
+```
