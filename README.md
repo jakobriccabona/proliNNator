@@ -28,7 +28,7 @@ pip install biopython torch torchvision torchaudio pyg-lib torch_geometric numpy
 
 ```bash
 python graph_generation.py \
-  --dataset-dir /media/data/jri/cath_S40/whole-dataset \
+  --dataset-dir DATA_DIR \
   --output-path graphs.jsonl
 ```
 
@@ -44,7 +44,7 @@ Key features per residue:
 ```bash
 python graph_visualization.py \
   --graph-file graphs.jsonl \
-  --structure-id 2g3aA01 \
+  --structure-id ID \
   --output-path example.png
 ```
 
@@ -73,8 +73,8 @@ Notes:
 ```bash
 python predict_proline_probabilities.py \
   --model-path models/proline_gat.pt \
-  --pdb-path /media/data/jri/cath_S40/whole-dataset/2g3aA01.pdb \
-  --output-path annotated/2g3aA01_probs.pdb \
+  --pdb-path PDB_PATH \
+  --output-path OUT_PATH \
   --hidden-dim 32 \
   --device cuda
 ```
