@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+from __future__ import annotations
 print("""
                      _  _  _   _  _   _         _                
  _ __   _ __   ___  | |(_)| \ | || \ | |  __ _ | |_   ___   _ __ 
@@ -17,8 +17,6 @@ and writes a new PDB where every atom in a residue receives the predicted
 probability (0..1) in its B-factor column.
 """
 # General imports
-from __future__ import annotations
-
 import argparse
 import math
 from pathlib import Path
