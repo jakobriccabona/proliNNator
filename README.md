@@ -71,7 +71,7 @@ Notes:
 ### 4. Predict on New Structures
 
 ```bash
-python predict_proline_probabilities.py \
+python proliNNator.py \
   --model-path models/proline_gat.pt \
   --pdb-path PDB_PATH \
   --output-path OUT_PATH \
