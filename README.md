@@ -1,4 +1,4 @@
-# Proline Probability Graph Pipeline
+# proliNNator
 
 End-to-end utilities to label proline residues in protein structures, train a graph neural network, and annotate new PDBs with predicted proline probabilities.
 
