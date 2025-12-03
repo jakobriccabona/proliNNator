@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+
+print("""
+                     _  _  _   _  _   _         _                
+ _ __   _ __   ___  | |(_)| \ | || \ | |  __ _ | |_   ___   _ __ 
+| '_ \ | '__| / _ \ | || ||  \| ||  \| | / _` || __| / _ \ | '__|
+| |_) || |   | (_) || || || |\  || |\  || (_| || |_ | (_) || |   
+| .__/ |_|    \___/ |_||_||_| \_||_| \_| \__,_| \__| \___/ |_|   
+|_|                                                                               
+""")
+
 """
 Load a trained ResidueGAT model and annotate a PDB with proline probabilities.
 
@@ -6,7 +16,7 @@ The script parses a single PDB file, runs the classifier on each residue node,
 and writes a new PDB where every atom in a residue receives the predicted
 probability (0..1) in its B-factor column.
 """
-
+# General imports
 from __future__ import annotations
 
 import argparse
@@ -14,10 +24,13 @@ import math
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
+#Pytorch imports
 import torch
 import torch.nn.functional as F
 from torch import nn
 from torch_geometric.data import Data
+
+#Biopython imports
 from Bio.PDB import PDBIO, PDBParser, is_aa
 from Bio.PDB.vectors import Vector, calc_dihedral
 
