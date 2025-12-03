@@ -22,6 +22,12 @@ Install (example):
 pip install biopython torch torchvision torchaudio pyg-lib torch_geometric numpy matplotlib scikit-learn
 ```
 
+Docker installation:
+
+```bash
+sudo docker build -t prolinnator:latest .
+```
+
 ## Usage
 
 ### 1. Generate Graphs
@@ -80,6 +86,18 @@ python proliNNator.py \
 ```
 
 The output PDB stores per-residue proline probabilities in the B-factor column (identical value for all atoms in a residue).
+
+### 5. Docker execution
+
+```bash
+docker run --gpus all \
+ -v $(PWD)/test:/data prolinnator:latest python proliNNator.py \
+ --model-path models/proline_gat.pt \
+ --pdb-path test/3ft7.pdb \
+ --output-path data/out.pdb \
+ --hidden-dim 32 \
+ --device cuda
+```
 
 ## Tips
 
