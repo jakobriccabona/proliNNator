@@ -34,32 +34,7 @@ from Bio.PDB.vectors import Vector, calc_dihedral
 
 
 # ---------- Model definition (matches train_gcn.py) ----------
-
-class ResidueGAT(nn.Module):
-    def __init__(self, in_dim: int, hidden_dim: int, dropout: float = 0.0, heads: int = 4):
-        super().__init__()
-        from torch_geometric.nn import GATConv
-
-        self.gat = GATConv(
-            in_channels=in_dim,
-            out_channels=hidden_dim,
-            heads=heads,
-            concat=False,
-            dropout=dropout,
-        )
-        self.mlp = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, 1),
-        )
-
-    def forward(self, data: Data) -> torch.Tensor:
-        x, edge_index = data.x, data.edge_index
-        x = self.gat(x, edge_index)
-        x = torch.relu(x)
-        return self.mlp(x).squeeze(-1)
-
+from train_gcn import ResidueGAT
 
 # ---------- Geometry utilities ----------
 

@@ -41,12 +41,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=3e-4, help="Adam learning rate.")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="Adam weight decay.")
     parser.add_argument(
-        "--kernel-l2",
-        type=float,
-        default=0.0,
-        help="Additional L2 penalty applied to GAT/MLP weights (set >0 to enable).",
-    )
-    parser.add_argument(
         "--train-val-test",
         nargs=3,
         type=float,
@@ -147,24 +141,36 @@ def compute_class_counts(dataset: ResidueGraphDataset) -> Tuple[int, int]:
 class ResidueGAT(nn.Module):
     def __init__(self, in_dim: int, hidden_dim: int, dropout: float = 0.2, heads: int = 4):
         super().__init__()
-        self.gat = GATConv(
+        self.gat1 = GATConv(
             in_channels=in_dim,
             out_channels=hidden_dim,
             heads=heads,
-            concat=False,
+            concat=True,
             dropout=dropout,
         )
+        self.gat2 = GATConv(
+            in_channels=hidden_dim*heads, 
+            out_channels=hidden_dim, 
+            heads=heads, 
+            concat=False, 
+            dropout=dropout,
+        )
+    
         self.mlp = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, 1),
+            nn.Linear(hidden_dim, (hidden_dim // 2)),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear((hidden_dim // 2), 1),
         )
 
     def forward(self, data: Data) -> torch.Tensor:
         x, edge_index = data.x, data.edge_index
-        x = self.gat(x, edge_index)
-        x = F.relu(x)
+        x = self.gat1(x, edge_index)
+        x = self.gat2(x, edge_index)
+        x = F.leaky_relu(x)
         return self.mlp(x).squeeze(-1)
 
 
@@ -178,7 +184,7 @@ def split_dataset(dataset: Dataset, splits: Sequence[float], seed: int) -> Tuple
     return torch.utils.data.random_split(dataset, lengths, generator=generator)
 
 
-def train_epoch(model, loader, criterion, optimizer, device, kernel_l2: float = 0.0):
+def train_epoch(model, loader, criterion, optimizer, device):
     model.train()
     total_loss = 0.0
     total_nodes = 0
@@ -187,12 +193,6 @@ def train_epoch(model, loader, criterion, optimizer, device, kernel_l2: float = 
         optimizer.zero_grad()
         logits = model(data)
         loss = criterion(logits, data.y)
-        if kernel_l2 > 0:
-            l2_reg = 0.0
-            for param in model.parameters():
-                if param.dim() > 1:
-                    l2_reg = l2_reg + param.pow(2).sum()
-            loss = loss + kernel_l2 * l2_reg
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * data.num_nodes
@@ -317,7 +317,7 @@ def main() -> None:
     best_val_loss = float("inf")
     epochs_since_improve = 0
     for epoch in range(1, args.epochs + 1):
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, device, kernel_l2=args.kernel_l2)
+        train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
