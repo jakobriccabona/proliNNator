@@ -40,6 +40,9 @@ from train_gcn import ResidueGAT
 
 BACKBONE_ATOMS = {"N", "CA", "C", "O", "OXT"}
 
+# Hydrogen-bond detection threshold (N...O distance in Angstroms)
+HBOND_DISTANCE = 3.5
+
 
 def get_atom_vector(residue, atom_name: str) -> Optional[Vector]:
     if residue is None:
@@ -88,7 +91,13 @@ def chain_residues(chain) -> List:
     return residues
 
 
-def build_node_features(residue, prev_res, next_res) -> List[float]:
+def build_node_features(residue, prev_res, next_res, hbond_donors: int, hbond_acceptors: int) -> List[float]:
+    """Build node features matching the training pipeline.
+
+    Returns a 9-element feature vector:
+    [phi_cos, phi_sin, psi_cos, psi_sin, omega_cos, omega_sin,
+     sidechain_heavy_atoms, backbone_hbond_donors, backbone_hbond_acceptors]
+    """
     phi = (
         dihedral_or_none(
             [
@@ -130,7 +139,6 @@ def build_node_features(residue, prev_res, next_res) -> List[float]:
     psi_c, psi_s = torsion_to_cos_sin(psi)
     omg_c, omg_s = torsion_to_cos_sin(omega)
     sidechain = float(count_sidechain_heavy_atoms(residue))
-    x, y, z = residue["CA"].coord
     return [
         phi_c,
         phi_s,
@@ -139,9 +147,8 @@ def build_node_features(residue, prev_res, next_res) -> List[float]:
         omg_c,
         omg_s,
         sidechain,
-        float(x),
-        float(y),
-        float(z),
+        float(hbond_donors),
+        float(hbond_acceptors),
     ]
 
 
@@ -151,20 +158,54 @@ def structure_to_graph(structure) -> Tuple[Data, List]:
     residue_refs = []
 
     model = next(structure.get_models())
+    # First pass: collect filtered residues per chain and add sequence adjacency
     for chain in model:
         residues = chain_residues(chain)
         prev_idx = None
-        for idx, residue in enumerate(residues):
-            prev_res = residues[idx - 1] if idx > 0 else None
-            next_res = residues[idx + 1] if idx + 1 < len(residues) else None
-            features = build_node_features(residue, prev_res, next_res)
-            nodes.append(features)
+        for residue in residues:
             residue_refs.append(residue)
-            node_idx = len(nodes) - 1
+            node_idx = len(residue_refs) - 1
             if prev_idx is not None:
                 edges.append((prev_idx, node_idx))
                 edges.append((node_idx, prev_idx))
             prev_idx = node_idx
+
+    # Compute N and O vectors for all filtered residues
+    n_vecs = [get_atom_vector(r, "N") for r in residue_refs]
+    o_vecs = [get_atom_vector(r, "O") or get_atom_vector(r, "OXT") for r in residue_refs]
+
+    # Initialize donor/acceptor counts
+    donors = [0 for _ in residue_refs]
+    acceptors = [0 for _ in residue_refs]
+
+    # Iterate pairs to detect simple backbone H-bond like interactions
+    num_nodes = len(residue_refs)
+    for i in range(num_nodes):
+        for j in range(i + 1, num_nodes):
+            ni = n_vecs[i]
+            oj = o_vecs[j]
+            if ni is not None and oj is not None:
+                if (ni - oj).norm() <= HBOND_DISTANCE:
+                    if (i, j) not in edges and (j, i) not in edges:
+                        edges.append((i, j))
+                    donors[i] += 1
+                    acceptors[j] += 1
+
+            nj = n_vecs[j]
+            oi = o_vecs[i]
+            if nj is not None and oi is not None:
+                if (nj - oi).norm() <= HBOND_DISTANCE:
+                    if (i, j) not in edges and (j, i) not in edges:
+                        edges.append((i, j))
+                    donors[j] += 1
+                    acceptors[i] += 1
+
+    # Build node features now that donor/acceptor counts are known
+    for idx, residue in enumerate(residue_refs):
+        prev_res = residue_refs[idx - 1] if idx > 0 else None
+        next_res = residue_refs[idx + 1] if idx + 1 < len(residue_refs) else None
+        features = build_node_features(residue, prev_res, next_res, donors[idx], acceptors[idx])
+        nodes.append(features)
 
     x = torch.tensor(nodes, dtype=torch.float)
     if edges:

@@ -34,6 +34,8 @@ class ResidueNode:
     omega: Optional[float]
     sidechain_heavy_atoms: int
     label: int
+    backbone_hbond_donors: int = 0
+    backbone_hbond_acceptors: int = 0
 
 
 @dataclass
@@ -45,7 +47,11 @@ class ResidueGraph:
     edges: List[Tuple[int, int]]
 
 
+
 BACKBONE_ATOMS = {"N", "CA", "C", "O", "OXT"}
+
+# Hydrogen-bond detection threshold (N...O distance in Angstroms)
+HBOND_DISTANCE = 3.5
 
 
 def parse_args() -> argparse.Namespace:
@@ -108,7 +114,7 @@ def residue_id(residue) -> str:
     """Create a stable identifier for a residue."""
     hetflag, seq_id, insertion = residue.id
     insertion = insertion.strip() or "-"
-    return f"{hetflag}{seq_id}{insertion}"
+    return f"{seq_id}"
 
 
 def get_atom_vector(residue, atom_name: str) -> Optional[Vector]:
@@ -226,6 +232,48 @@ def residues_to_graph(structure, structure_id: str) -> ResidueGraph:
                 edges.append((prev_node_index, node_index))
 
             prev_node_index = node_index
+
+    # Detect simple backbone hydrogen-bond like interactions by N...O distance.
+    # For each residue pair i,j (i < j) we check both directions:
+    #  - if N_i and O_j are present and closer than HBOND_DISTANCE, count
+    #    i as donor and j as acceptor and add an edge (i,j) if not present.
+    #  - similarly for N_j and O_i.
+    n_positions: List[Optional[Vector]] = [get_atom_vector(r, "N") for r in model.get_residues() if is_aa(r, standard=True) and "CA" in r]
+    # The residues list above was filtered per-chain; we already built `nodes` from filtered residues per chain
+    # So build simple maps from index -> atom vectors using the `residues` sequences collected per chain.
+    # Instead, compute N and O positions from our nodes list using the original residues again.
+    # Reconstruct per-node N/O vectors from the residues used to create nodes.
+    # To do that we iterate chains again to gather the same filtered residues ordering.
+    all_filtered_residues = []
+    for chain in model:
+        all_filtered_residues.extend(chain_residues(chain))
+
+    n_vecs: List[Optional[Vector]] = [get_atom_vector(r, "N") for r in all_filtered_residues]
+    o_vecs: List[Optional[Vector]] = [get_atom_vector(r, "O") or get_atom_vector(r, "OXT") for r in all_filtered_residues]
+
+    # Iterate over pairs
+    num_nodes = len(nodes)
+    for i in range(num_nodes):
+        for j in range(i + 1, num_nodes):
+            ni = n_vecs[i]
+            oj = o_vecs[j]
+            if ni is not None and oj is not None:
+                if (ni - oj).norm() <= HBOND_DISTANCE:
+                    # add edge if not already present
+                    if (i, j) not in edges and (j, i) not in edges:
+                        edges.append((i, j))
+                    # increment donor/acceptor counts
+                    nodes[i].backbone_hbond_donors += 1
+                    nodes[j].backbone_hbond_acceptors += 1
+
+            nj = n_vecs[j]
+            oi = o_vecs[i]
+            if nj is not None and oi is not None:
+                if (nj - oi).norm() <= HBOND_DISTANCE:
+                    if (i, j) not in edges and (j, i) not in edges:
+                        edges.append((i, j))
+                    nodes[j].backbone_hbond_donors += 1
+                    nodes[i].backbone_hbond_acceptors += 1
 
     return ResidueGraph(structure_id=structure_id, nodes=nodes, edges=edges)
 

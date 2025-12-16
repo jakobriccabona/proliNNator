@@ -24,8 +24,10 @@ from sklearn.metrics import confusion_matrix, precision_recall_curve
 from torch import nn
 from torch_geometric.data import Data, Dataset
 from torch_geometric.loader import DataLoader
-from torch_geometric.nn import GATConv
+from torch_geometric.nn import GATv2Conv
 
+plt.rcParams.update({'font.size': 15})
+plt.rcParams['axes.linewidth'] = 2
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a GAT+MLP node classifier on residue graphs.")
@@ -38,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=500, help="Number of training epochs.")
     parser.add_argument("--batch-size", type=int, default=4, help="Graphs per batch.")
     parser.add_argument("--hidden-dim", type=int, default=32, help="Hidden feature size.")
-    parser.add_argument("--learning-rate", type=float, default=3e-4, help="Adam learning rate.")
+    parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam learning rate.")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="Adam weight decay.")
     parser.add_argument(
         "--train-val-test",
@@ -84,8 +86,10 @@ def build_node_features(node: dict) -> List[float]:
     psi_c, psi_s = torsion_to_cos_sin(node.get("psi"))
     omg_c, omg_s = torsion_to_cos_sin(node.get("omega"))
     sidechain = float(node.get("sidechain_heavy_atoms", 0))
-    x, y, z = node.get("ca_coord", (0.0, 0.0, 0.0))
-    return [phi_c, phi_s, psi_c, psi_s, omg_c, omg_s, sidechain, float(x), float(y), float(z)]
+    #x, y, z = node.get("ca_coord", (0.0, 0.0, 0.0))
+    hbond_donors = float(node.get("backbone_hbond_donors", 0))
+    hbond_acceptors = float(node.get("backbone_hbond_acceptors", 0))
+    return [phi_c, phi_s, psi_c, psi_s, omg_c, omg_s, sidechain, hbond_donors, hbond_acceptors] #float(x), float(y), float(z),
 
 
 def graph_entry_to_data(entry: dict) -> Data:
@@ -141,25 +145,27 @@ def compute_class_counts(dataset: ResidueGraphDataset) -> Tuple[int, int]:
 class ResidueGAT(nn.Module):
     def __init__(self, in_dim: int, hidden_dim: int, dropout: float = 0.2, heads: int = 4):
         super().__init__()
-        self.gat1 = GATConv(
+        self.gat1 = GATv2Conv(
             in_channels=in_dim,
             out_channels=hidden_dim,
             heads=heads,
             concat=True,
             dropout=dropout,
         )
-        self.gat2 = GATConv(
+        # LayerNorm to stabilize and normalize features after attention
+        self.ln1 = nn.LayerNorm(hidden_dim * heads)
+        self.gat2 = GATv2Conv(
             in_channels=hidden_dim*heads, 
             out_channels=hidden_dim, 
             heads=heads, 
             concat=False, 
             dropout=dropout,
         )
+        self.ln2 = nn.LayerNorm(hidden_dim)
     
         self.mlp = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.Dropout(dropout),
             nn.Linear(hidden_dim, (hidden_dim // 2)),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -169,7 +175,10 @@ class ResidueGAT(nn.Module):
     def forward(self, data: Data) -> torch.Tensor:
         x, edge_index = data.x, data.edge_index
         x = self.gat1(x, edge_index)
+        x = self.ln1(x)
+        x = F.elu(x)
         x = self.gat2(x, edge_index)
+        x = self.ln2(x)
         x = F.leaky_relu(x)
         return self.mlp(x).squeeze(-1)
 
@@ -177,11 +186,58 @@ class ResidueGAT(nn.Module):
 def split_dataset(dataset: Dataset, splits: Sequence[float], seed: int) -> Tuple[Dataset, Dataset, Dataset]:
     if not math.isclose(sum(splits), 1.0, rel_tol=1e-4):
         raise ValueError("Split fractions must sum to 1.0")
-    lengths = [int(len(dataset) * frac) for frac in splits]
-    remainder = len(dataset) - sum(lengths)
-    lengths[0] += remainder  # assign leftover to train split
-    generator = torch.Generator().manual_seed(seed)
-    return torch.utils.data.random_split(dataset, lengths, generator=generator)
+    # Perform a label-aware (stratified) split at the graph level. We split
+    # graphs containing any positive nodes separately from graphs with no
+    # positives, so both groups are represented in each partition according
+    # to the requested fractions.
+    train_frac, val_frac, test_frac = splits
+
+    pos_idxs = []
+    neg_idxs = []
+    for i in range(len(dataset)):
+        data = dataset[i]
+        # treat a graph as positive if it contains any positive node labels
+        if int(data.y.sum().item()) > 0:
+            pos_idxs.append(i)
+        else:
+            neg_idxs.append(i)
+
+    rng = random.Random(seed)
+    rng.shuffle(pos_idxs)
+    rng.shuffle(neg_idxs)
+
+    def _split_indices(idxs: Sequence[int], fracs: Sequence[float]) -> Tuple[list, list, list]:
+        n = len(idxs)
+        t = int(n * fracs[0])
+        v = int(n * fracs[1])
+        te = int(n * fracs[2])
+        # assign any leftover due to rounding to the train split
+        remainder = n - (t + v + te)
+        t += remainder
+        train_part = idxs[:t]
+        val_part = idxs[t : t + v]
+        test_part = idxs[t + v : t + v + te]
+        return train_part, val_part, test_part
+
+    pos_train, pos_val, pos_test = _split_indices(pos_idxs, splits)
+    neg_train, neg_val, neg_test = _split_indices(neg_idxs, splits)
+
+    train_indices = pos_train + neg_train
+    val_indices = pos_val + neg_val
+    test_indices = pos_test + neg_test
+
+    # Shuffle final lists to mix positive and negative graphs
+    rng.shuffle(train_indices)
+    rng.shuffle(val_indices)
+    rng.shuffle(test_indices)
+
+    from torch.utils.data import Subset
+
+    train_subset = Subset(dataset, train_indices)
+    val_subset = Subset(dataset, val_indices)
+    test_subset = Subset(dataset, test_indices)
+
+    return train_subset, val_subset, test_subset
 
 
 def train_epoch(model, loader, criterion, optimizer, device):
@@ -239,8 +295,7 @@ def collect_predictions(model, loader, device):
 
 
 def plot_diagnostics(history, confusion_norm, precision, recall, report_path: Path | None):
-    plt.rcParams.update({"font.size": 15})
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
 
     ax_loss = axes[0]
     ax_loss.plot(history["train_loss"], label="Train Loss")
@@ -248,7 +303,7 @@ def plot_diagnostics(history, confusion_norm, precision, recall, report_path: Pa
     ax_loss.set_xlabel("Epoch", fontsize=15)
     ax_loss.set_ylabel("Loss", fontsize=15)
     ax_loss.legend()
-    ax_loss.set_title("Training vs Validation Loss")
+    #ax_loss.set_title("Training vs Validation Loss")
 
     ax_pr = axes[1]
     ax_pr.plot(recall, precision, color="purple")
@@ -256,7 +311,7 @@ def plot_diagnostics(history, confusion_norm, precision, recall, report_path: Pa
     ax_pr.set_ylabel("Precision", fontsize=15)
     ax_pr.set_xlim([0.0, 1.0])
     ax_pr.set_ylim([0.0, 1.05])
-    ax_pr.set_title("Precision-Recall Curve (Test)")
+    #ax_pr.set_title("Precision-Recall Curve (Test)")
 
     ax_cm_norm = axes[2]
     im_norm = ax_cm_norm.imshow(confusion_norm, cmap="Greens", vmin=0.0, vmax=1.0)
@@ -274,13 +329,13 @@ def plot_diagnostics(history, confusion_norm, precision, recall, report_path: Pa
                 va="center",
                 color="black",
             )
-    ax_cm_norm.set_title("Normalized Confusion Matrix (Test)")
+    #ax_cm_norm.set_title("Normalized Confusion Matrix (Test)")
     fig.colorbar(im_norm, ax=ax_cm_norm, fraction=0.046, pad=0.04)
 
     plt.tight_layout()
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(report_path, dpi=300)
+        fig.savefig(report_path, dpi=300, bbox_inches="tight")
         print(f"Saved diagnostics plot to {report_path}")
     else:
         plt.show()
@@ -302,7 +357,17 @@ def main() -> None:
 
     train_split, val_split, test_split = split_dataset(dataset, args.train_val_test, args.seed)
 
-    train_loader = DataLoader(train_split, batch_size=args.batch_size, shuffle=True)
+    # Oversample graphs containing positive nodes using a WeightedRandomSampler.
+    # Weight each graph by (1 + number_of_positive_nodes) so graphs with positives
+    # are sampled more frequently. This is a simple way to bias training toward
+    # positive examples while still using class weights in the loss.
+    train_graphs = [train_split[i] for i in range(len(train_split))]
+    graph_weights = [1.0 + float(g.y.sum().item()) for g in train_graphs]
+    # Avoid all-zero weights
+    if sum(graph_weights) == 0:
+        graph_weights = [1.0 for _ in graph_weights]
+    sampler = torch.utils.data.WeightedRandomSampler(weights=graph_weights, num_samples=len(graph_weights), replacement=True)
+    train_loader = DataLoader(train_split, batch_size=args.batch_size, sampler=sampler)
     val_loader = DataLoader(val_split, batch_size=args.batch_size)
     test_loader = DataLoader(test_split, batch_size=args.batch_size)
 
