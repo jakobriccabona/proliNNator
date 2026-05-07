@@ -3,22 +3,25 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import SAGEConv
+from torch_geometric.nn import GATv2Conv
 
 
 class ProlineSiteGNN(nn.Module):
-    def __init__(self, in_dim: int, hidden_dim: int = 128, layers: int = 3, dropout: float = 0.2):
+    def __init__(self, in_dim: int, hidden_dim: int = 128, layers: int = 3, dropout: float = 0.2, edge_dim: int = 0):
         super().__init__()
         if layers < 1:
             raise ValueError("layers must be >= 1")
 
         self.dropout = dropout
+        self.edge_dim = edge_dim
+        _edge_dim = edge_dim if edge_dim > 0 else None
+
         self.convs = nn.ModuleList()
         self.norms = nn.ModuleList()
-        self.convs.append(SAGEConv(in_dim, hidden_dim))
+        self.convs.append(GATv2Conv(in_dim, hidden_dim, heads=1, concat=False, edge_dim=_edge_dim, add_self_loops=False))
         self.norms.append(nn.BatchNorm1d(hidden_dim))
         for _ in range(layers - 1):
-            self.convs.append(SAGEConv(hidden_dim, hidden_dim))
+            self.convs.append(GATv2Conv(hidden_dim, hidden_dim, heads=1, concat=False, edge_dim=_edge_dim, add_self_loops=False))
             self.norms.append(nn.BatchNorm1d(hidden_dim))
 
         self.head = nn.Sequential(
@@ -29,10 +32,11 @@ class ProlineSiteGNN(nn.Module):
             nn.Sigmoid(),
         )
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor | None = None) -> torch.Tensor:
+        _ea = edge_attr if self.edge_dim > 0 else None
         h = x
         for conv, norm in zip(self.convs, self.norms):
-            h = conv(h, edge_index)
+            h = conv(h, edge_index, edge_attr=_ea)
             h = norm(h)
             h = F.relu(h)
             h = F.dropout(h, p=self.dropout, training=self.training)

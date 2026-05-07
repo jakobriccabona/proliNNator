@@ -62,10 +62,22 @@ def build_orchestrator_parser() -> argparse.ArgumentParser:
             "and a matched from-scratch baseline; write a consolidated comparison report."
         )
     )
-    p.add_argument("--csv", required=True)
-    p.add_argument("--structures-dir", required=True)
+    p.add_argument("--csv", required=True,
+                   help="Mutation CSV for finetuning (experimental ΔΔG data).")
+    p.add_argument("--structures-dir", required=True,
+                   help="Directory of PDB structures for finetuning (e.g. AF2 structures).")
     p.add_argument("--embeddings-dir", default=None)
     p.add_argument("--embedding-strict", action="store_true")
+
+    # Optional separate data for stage-1 native-proline pretraining.
+    # If --pretrain-structures-dir is given, stage 1 uses that directory instead of
+    # --structures-dir, with a matching index CSV (auto-generated if not provided).
+    p.add_argument("--pretrain-structures-dir", default=None,
+                   help="Directory of PDB structures to use for native-proline pretraining "
+                        "(e.g. CATH S40). If omitted, --structures-dir is used for all stages.")
+    p.add_argument("--pretrain-csv", default=None,
+                   help="Index CSV (protein_id, pdb_file, chain_id) for the pretrain structures. "
+                        "Auto-generated from --pretrain-structures-dir if not provided.")
 
     p.add_argument("--output-root", default="outputs/transfer_runs")
     p.add_argument("--seed", type=int, default=42)
@@ -107,10 +119,47 @@ def build_orchestrator_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _common_train_flags(args: argparse.Namespace, epochs: int, output_dir: Path) -> list[str]:
+def _generate_cath_csv(structures_dir: Path, output_path: Path) -> Path:
+    """Auto-generate a native-proline index CSV from a CATH-style structures directory.
+
+    CATH domain filenames follow <4-char pdb><1-char chain><2-char segment>
+    (e.g. ``12asA00`` → chain A). Files may optionally carry a ``.pdb`` extension.
+    """
+    import csv
+
+    rows = []
+    for f in sorted(structures_dir.iterdir()):
+        if not f.is_file():
+            continue
+        stem = f.stem
+        if len(stem) >= 5:
+            chain = stem[4].upper()
+            rows.append({"protein_id": stem, "pdb_file": f.name, "chain_id": chain})
+
+    if not rows:
+        raise ValueError(f"No structure files found in {structures_dir}")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=["protein_id", "pdb_file", "chain_id"])
+        w.writeheader()
+        w.writerows(rows)
+
+    print(f"Generated pretrain CSV: {output_path} ({len(rows)} structures)")
+    return output_path
+
+
+def _common_train_flags(
+    args: argparse.Namespace,
+    epochs: int,
+    output_dir: Path,
+    csv: str | None = None,
+    structures_dir: str | None = None,
+    include_embeddings: bool = True,
+) -> list[str]:
     flags = [
-        "--csv", args.csv,
-        "--structures-dir", args.structures_dir,
+        "--csv", csv or args.csv,
+        "--structures-dir", structures_dir or args.structures_dir,
         "--epochs", str(epochs),
         "--batch-size", str(args.batch_size),
         "--hidden-dim", str(args.hidden_dim),
@@ -133,9 +182,9 @@ def _common_train_flags(args: argparse.Namespace, epochs: int, output_dir: Path)
         "--output-dir", str(output_dir),
     ]
 
-    if args.embeddings_dir:
+    if include_embeddings and args.embeddings_dir:
         flags.extend(["--embeddings-dir", args.embeddings_dir])
-    if args.embedding_strict:
+    if include_embeddings and args.embedding_strict:
         flags.append("--embedding-strict")
     if args.use_pos_weight:
         flags.append("--use-pos-weight")
@@ -156,7 +205,32 @@ def main() -> None:
     run_finetune = output_root / "stage2_finetune_from_pretrain"
     run_scratch = output_root / "stage2_scratch_baseline"
 
-    pretrain_flags = _common_train_flags(args, epochs=args.pretrain_epochs, output_dir=run_pretrain)
+    # Resolve pretrain data: use dedicated CATH/custom structures if provided,
+    # otherwise fall back to the same data as finetuning.
+    pretrain_csv = args.csv
+    pretrain_structures = args.structures_dir
+    pretrain_include_embeddings = True
+    if args.pretrain_structures_dir:
+        pretrain_structures = args.pretrain_structures_dir
+        if args.pretrain_csv:
+            pretrain_csv = args.pretrain_csv
+        else:
+            # Auto-generate an index CSV from the CATH-style directory.
+            generated_csv = output_root / "pretrain_structures_index.csv"
+            pretrain_csv = str(
+                _generate_cath_csv(Path(args.pretrain_structures_dir), generated_csv)
+            )
+        # CATH structures have no ESM2 embeddings; skip embedding flags for stage 1.
+        pretrain_include_embeddings = False
+
+    pretrain_flags = _common_train_flags(
+        args,
+        epochs=args.pretrain_epochs,
+        output_dir=run_pretrain,
+        csv=pretrain_csv,
+        structures_dir=pretrain_structures,
+        include_embeddings=pretrain_include_embeddings,
+    )
     pretrain_flags.extend(["--task", "native_proline"])
     if args.mask_sequence_features:
         pretrain_flags.append("--mask-sequence-features")

@@ -111,7 +111,7 @@ def _evaluate_loss(
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            logits = model(batch.x, batch.edge_index)
+            logits = model(batch.x, batch.edge_index, getattr(batch, "edge_attr", None))
             loss = _compute_train_loss(logits, batch.y, batch.label_mask, args=args, pos_weight=pos_weight)
             losses.append(float(loss.item()))
     return float(np.mean(losses)) if losses else float("nan")
@@ -123,7 +123,7 @@ def _evaluate_reference_loss(model: ProlineSiteGNN, loader: DataLoader, device: 
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            logits = model(batch.x, batch.edge_index)
+            logits = model(batch.x, batch.edge_index, getattr(batch, "edge_attr", None))
             loss = masked_bce_loss(logits, batch.y, batch.label_mask, pos_weight=None)
             losses.append(float(loss.item()))
     return float(np.mean(losses)) if losses else float("nan")
@@ -137,7 +137,7 @@ def _collect_predictions(model: ProlineSiteGNN, loader: DataLoader, device: torc
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
-            logits = model(batch.x, batch.edge_index)
+            logits = model(batch.x, batch.edge_index, getattr(batch, "edge_attr", None))
             ys, ps = _collect_targets_and_probs(logits, batch.y, batch.label_mask)
             if ys.size > 0:
                 ys_all.append(ys)
@@ -307,7 +307,7 @@ def _to_ego_subgraph_samples(graphs: list, num_hops: int) -> list:
             continue
 
         for center in labeled_nodes.tolist():
-            subset, sub_edge_index, mapping, _ = k_hop_subgraph(
+            subset, sub_edge_index, mapping, edge_mask = k_hop_subgraph(
                 node_idx=int(center),
                 num_hops=num_hops,
                 edge_index=graph.edge_index,
@@ -343,9 +343,14 @@ def _to_ego_subgraph_samples(graphs: list, num_hops: int) -> list:
 
             x_sub = torch.cat([x_sub, ca_dist, seq_sep], dim=1)
 
+            edge_attr_sub = None
+            if hasattr(graph, "edge_attr") and graph.edge_attr is not None:
+                edge_attr_sub = graph.edge_attr[edge_mask]
+
             sample = graph.__class__(
                 x=x_sub,
                 edge_index=sub_edge_index,
+                edge_attr=edge_attr_sub,
                 y=y_sub,
                 label_mask=label_mask_sub,
             )
@@ -371,6 +376,7 @@ def _save_checkpoint(path: Path, model: ProlineSiteGNN, in_dim: int, args: argpa
             "hidden_dim": args.hidden_dim,
             "layers": args.layers,
             "dropout": args.dropout,
+            "edge_dim": getattr(model, "edge_dim", 0),
             "ddg_threshold": args.ddg_threshold,
             "distance_cutoff": args.distance_cutoff,
             "embeddings_dir": args.embeddings_dir,
@@ -386,6 +392,7 @@ def _load_model(path: Path, device: torch.device) -> ProlineSiteGNN:
         hidden_dim=int(ckpt["hidden_dim"]),
         layers=int(ckpt["layers"]),
         dropout=float(ckpt["dropout"]),
+        edge_dim=int(ckpt.get("edge_dim", 0)),
     ).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     return model
@@ -484,7 +491,8 @@ def train(args: argparse.Namespace) -> None:
     if len(train_set) == 0:
         raise ValueError("Training set is empty after preprocessing/sampling")
     in_dim = int(train_set[0].x.shape[1])
-    model = ProlineSiteGNN(in_dim=in_dim, hidden_dim=args.hidden_dim, layers=args.layers, dropout=args.dropout).to(device)
+    edge_dim = int(train_set[0].edge_attr.shape[1]) if (hasattr(train_set[0], "edge_attr") and train_set[0].edge_attr is not None) else 0
+    model = ProlineSiteGNN(in_dim=in_dim, hidden_dim=args.hidden_dim, layers=args.layers, dropout=args.dropout, edge_dim=edge_dim).to(device)
     if args.pretrained_checkpoint:
         _load_pretrained_weights(model, Path(args.pretrained_checkpoint), device)
     optimizer = _build_optimizer(model, args)
@@ -557,7 +565,7 @@ def train(args: argparse.Namespace) -> None:
         for batch in train_loader:
             batch = batch.to(device)
             optimizer.zero_grad(set_to_none=True)
-            logits = model(batch.x, batch.edge_index)
+            logits = model(batch.x, batch.edge_index, getattr(batch, "edge_attr", None))
             loss = _compute_train_loss(logits, batch.y, batch.label_mask, args=args, pos_weight=pos_weight)
             loss.backward()
             optimizer.step()

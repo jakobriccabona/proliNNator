@@ -154,6 +154,12 @@ def _extract_chain_residues(pdb_path: Path, chain_id: str) -> List[ResidueRecord
     return residues
 
 
+_EDGE_RBF_NUM = 16
+_EDGE_RBF_D_MAX = 8.0
+_EDGE_RBF_CENTERS = np.linspace(0.0, _EDGE_RBF_D_MAX, _EDGE_RBF_NUM).astype(np.float32)
+_EDGE_RBF_SIGMA = _EDGE_RBF_D_MAX / _EDGE_RBF_NUM  # 0.5 Å
+
+
 def _build_edges(coords: np.ndarray, distance_cutoff: float = 8.0) -> np.ndarray:
     n = coords.shape[0]
     diff = coords[:, None, :] - coords[None, :, :]
@@ -169,6 +175,19 @@ def _build_edges(coords: np.ndarray, distance_cutoff: float = 8.0) -> np.ndarray
         edges.add((i, j))
 
     return np.array(sorted(edges), dtype=np.int64).T
+
+
+def _build_edge_attr_rbf(coords: np.ndarray, edge_index: np.ndarray) -> np.ndarray:
+    """RBF-encode Cα distances for each directed edge.
+
+    Returns float32 array of shape [num_edges, _EDGE_RBF_NUM].
+    Gaussian kernels with centres linearly spaced in [0, _EDGE_RBF_D_MAX] Å.
+    """
+    src, dst = edge_index[0], edge_index[1]
+    diff = coords[src] - coords[dst]
+    dists = np.sqrt(np.sum(diff * diff, axis=-1))[:, None]  # [E, 1]
+    rbf = np.exp(-((dists - _EDGE_RBF_CENTERS[None, :]) ** 2) / (2.0 * _EDGE_RBF_SIGMA ** 2))
+    return rbf.astype(np.float32)
 
 
 def _compute_backbone_torsion_features(residues: List[ResidueRecord]) -> np.ndarray:
@@ -391,6 +410,7 @@ def build_graph_data_for_protein(
             aa_feats[:, 27:] = 0.0
 
     edge_index = _build_edges(coords, distance_cutoff=distance_cutoff)
+    edge_attr = _build_edge_attr_rbf(coords, edge_index)
     if task == "native_proline":
         labels = np.array([1.0 if r.aa == "P" else 0.0 for r in residues], dtype=np.float32)
         mask = np.ones(len(residues), dtype=bool)
@@ -400,6 +420,7 @@ def build_graph_data_for_protein(
     data = Data(
         x=torch.tensor(aa_feats, dtype=torch.float32),
         edge_index=torch.tensor(edge_index, dtype=torch.long),
+        edge_attr=torch.tensor(edge_attr, dtype=torch.float32),
         y=torch.tensor(labels, dtype=torch.float32),
         label_mask=torch.tensor(mask, dtype=torch.bool),
     )
@@ -464,7 +485,12 @@ def load_dataset(
         )
 
     grouped = df.groupby(["protein_id", "pdb_file", "chain_id"], dropna=False)
-    for (protein_id, pdb_file, chain_id), gdf in grouped:
+    groups = list(grouped)
+    n_total = len(groups)
+    report_every = max(1, n_total // 20)  # print at most 20 progress lines
+    for idx, ((protein_id, pdb_file, chain_id), gdf) in enumerate(groups):
+        if idx % report_every == 0 or idx == n_total - 1:
+            print(f"  loading structures {idx + 1}/{n_total} ...", flush=True)
         pdb_path = structures_dir / str(pdb_file)
         if not pdb_path.exists():
             continue
