@@ -425,12 +425,8 @@ def _build_optimizer(model: ProlineSiteGNN, args: argparse.Namespace) -> torch.o
 def train(args: argparse.Namespace) -> None:
     if args.cpu:
         device = torch.device("cpu")
-    elif torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
-        device = torch.device("mps")
     else:
-        device = torch.device("cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"device={device}")
 
