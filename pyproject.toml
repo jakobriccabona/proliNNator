@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prolinnator"
+version = "0.1.0"
+description = "Per-position Proline mutability prediction from structure and DDG data"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+  "matplotlib>=3.8",
+  "biopython>=1.84",
+  "tqdm>=4.66",
+  "torch>=2.3",
+  "torch-geometric>=2.5",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

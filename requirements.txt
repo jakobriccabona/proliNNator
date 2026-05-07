@@ -1,0 +1,8 @@
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.5
+matplotlib>=3.8
+biopython>=1.84
+tqdm>=4.66
+torch>=2.3
+torch-geometric>=2.5
